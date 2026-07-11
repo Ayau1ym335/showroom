@@ -63,7 +63,7 @@ export default async function HomePage() {
             <em className="text-taupe not-italic italic">для всей семьи</em>
           </h1>
           <p className="mb-8 max-w-md text-base leading-relaxed text-muted">
-            Мультибрендовый шоурум Dori — женская, мужская и детская одежда и обувь от проверенных
+            Мультибрендовый шоурум Dori из Астаны и Павлодара — женская, мужская и детская одежда и обувь от проверенных
             брендов из Европы, США, Кореи и Японии.
           </p>
           <div className="flex flex-wrap gap-3.5">
@@ -267,7 +267,7 @@ export default async function HomePage() {
             <span className="mb-4.5 block text-xs uppercase tracking-wide text-[#C9A876]">Свяжитесь с нами</span>
             <h2 className="mb-4.5 font-serif text-3xl font-medium">Мы на связи каждый день</h2>
             <p className="mb-7 max-w-sm text-sm leading-relaxed text-[#C9C2B4]">
-              Ответим на любые вопросы по товару, размеру и доставке. Быстрее всего — через WhatsApp.
+              Ответим на любые вопросы по товару, размеру и доставке. Ждём вас в наших шоурумах в Астане и Павлодаре! Быстрее всего — через WhatsApp.
             </p>
             <a
               href={buildWhatsAppLink(settings.whatsapp_number, contactMessage)}
