@@ -7,6 +7,8 @@ const NAV_ITEMS = [
   { href: '/admin/products', label: 'Товары', icon: '▤' },
   { href: '/admin/products/new', label: 'Добавить товар', icon: '＋' },
   { href: '/admin/categories', label: 'Категории и бренды', icon: '◈' },
+  { href: '/admin/banners', label: 'Баннеры', icon: '⊞' },
+  { href: '/admin/lookbook', label: 'Lookbook-видео', icon: '▶' },
   { href: '/admin/reviews', label: 'Отзывы', icon: '★' },
   { href: '/admin/settings', label: 'Настройки сайта', icon: '⚙' },
 ];

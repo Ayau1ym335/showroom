@@ -49,7 +49,23 @@ export async function getRelatedProducts(product: Product, limit = 4): Promise<P
 
 export async function getCatalogProducts(filters: CatalogFilters, pageSize = 12) {
   const supabase = await createClient();
+
+  // Если фильтр "только в наличии" — сначала получаем ID товаров у которых есть размер in_stock
+  let inStockProductIds: string[] | null = null;
+  if (filters.inStockOnly) {
+    const { data: stockRows } = await supabase
+      .from('product_sizes')
+      .select('product_id')
+      .eq('in_stock', true);
+    inStockProductIds = [...new Set((stockRows ?? []).map((r) => r.product_id))];
+  }
+
   let query = supabase.from('products').select(PRODUCT_SELECT, { count: 'exact' }).eq('is_published', true);
+
+  if (inStockProductIds !== null) {
+    if (inStockProductIds.length === 0) return { products: [], total: 0 };
+    query = query.in('id', inStockProductIds);
+  }
 
   if (filters.gender) query = query.eq('gender', filters.gender);
 
@@ -84,15 +100,7 @@ export async function getCatalogProducts(filters: CatalogFilters, pageSize = 12)
   query = query.range(from, to);
 
   const { data, count } = await query;
-
-  let products = (data as Product[]) ?? [];
-
-  // "Только в наличии" фильтруем на уровне приложения, т.к. наличие — по размерам, а не по товару целиком
-  if (filters.inStockOnly) {
-    products = products.filter((p) => p.sizes?.some((s) => s.in_stock));
-  }
-
-  return { products, total: count ?? 0 };
+  return { products: (data as Product[]) ?? [], total: count ?? 0 };
 }
 
 export async function getCategories(): Promise<Category[]> {

@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { getCatalogProducts, getCategories, getBrands, getSiteSettings } from '@/lib/data';
 import { SiteNav } from '@/components/layout/SiteNav';
 import { WhatsAppFloat } from '@/components/layout/WhatsAppFloat';
-import { ProductCard } from '@/components/catalog/ProductCard';
 import { GenderTabs, CatalogFilterPanel, SortSelect } from '@/components/catalog/CatalogFilters';
+import { CatalogLoadMore } from '@/components/catalog/CatalogLoadMore';
 import { Gender, CatalogFilters as CatalogFiltersType } from '@/types';
 
 interface Props {
@@ -21,7 +21,7 @@ export default async function CatalogPage({ searchParams }: Props) {
     maxPrice: params.maxPrice ? Number(params.maxPrice) : undefined,
     inStockOnly: params.inStock !== 'false',
     sort: (params.sort as CatalogFiltersType['sort']) ?? 'newest',
-    page: params.page ? Number(params.page) : 1,
+    page: 1,
   };
 
   const [{ products, total }, categories, brands, settings] = await Promise.all([
@@ -30,6 +30,11 @@ export default async function CatalogPage({ searchParams }: Props) {
     getBrands(),
     getSiteSettings(),
   ]);
+
+  // Собираем строку query-параметров для клиентского компонента (без page)
+  const searchParamsString = new URLSearchParams(
+    Object.entries(params).filter(([k, v]) => k !== 'page' && v !== undefined) as [string, string][]
+  ).toString();
 
   return (
     <>
@@ -55,11 +60,12 @@ export default async function CatalogPage({ searchParams }: Props) {
           {products.length === 0 ? (
             <p className="py-16 text-center text-muted">По выбранным фильтрам товаров не найдено.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-7 md:grid-cols-3">
-              {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
+            <CatalogLoadMore
+              initialProducts={products}
+              total={total}
+              currentPage={1}
+              searchParamsString={searchParamsString}
+            />
           )}
         </main>
       </div>

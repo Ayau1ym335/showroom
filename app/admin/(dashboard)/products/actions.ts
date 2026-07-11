@@ -47,7 +47,7 @@ export async function createProduct(input: CreateProductInput) {
       slug: slugify(input.title),
       description: input.description || null,
       price: input.price,
-      discount_price: input.discountPrice,
+      discount_price: (input.discountPrice != null && input.discountPrice > 0) ? input.discountPrice : null,
       brand_id: input.brandId || null,
       category_id: input.categoryId || null,
       gender: input.gender,

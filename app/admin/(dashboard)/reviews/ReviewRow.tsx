@@ -1,11 +1,14 @@
 'use client';
 
+import { useTransition } from 'react';
 import { Review } from '@/types';
 import { togglePublishReview, deleteReview } from './actions';
 
 export function ReviewRow({ review }: { review: Review }) {
+  const [isPending, startTransition] = useTransition();
+
   return (
-    <div className="flex items-center justify-between border-b border-line py-3.5 text-sm last:border-none">
+    <div className={`flex items-center justify-between border-b border-line py-3.5 text-sm last:border-none ${isPending ? 'opacity-50' : ''}`}>
       <div>
         <span className="font-medium">{review.author_name}</span>
         <span className="ml-2 text-taupe">{'★'.repeat(review.rating)}</span>
@@ -16,16 +19,18 @@ export function ReviewRow({ review }: { review: Review }) {
           {review.is_published ? 'Опубликован' : 'На модерации'}
         </span>
         <button
-          onClick={() => togglePublishReview(review.id, !review.is_published)}
-          className="rounded-lg border border-line px-2.5 py-1.5 text-xs hover:border-taupe-soft"
+          onClick={() => startTransition(() => togglePublishReview(review.id, !review.is_published))}
+          disabled={isPending}
+          className="rounded-lg border border-line px-2.5 py-1.5 text-xs hover:border-taupe-soft disabled:opacity-50"
         >
           {review.is_published ? 'Скрыть' : 'Опубликовать'}
         </button>
         <button
           onClick={() => {
-            if (confirm('Удалить отзыв?')) deleteReview(review.id);
+            if (confirm('Удалить отзыв?')) startTransition(() => deleteReview(review.id));
           }}
-          className="rounded-lg border border-line px-2.5 py-1.5 text-xs hover:border-danger hover:text-danger"
+          disabled={isPending}
+          className="rounded-lg border border-line px-2.5 py-1.5 text-xs hover:border-danger hover:text-danger disabled:opacity-50"
         >
           Удалить
         </button>

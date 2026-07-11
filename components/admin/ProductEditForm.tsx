@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Brand, Category } from '@/types';
-import { createProduct } from '@/app/admin/(dashboard)/products/actions';
+import { Brand, Category, Product } from '@/types';
+import { updateProduct } from '@/app/admin/(dashboard)/products/edit-actions';
+import { deleteProductMedia } from '@/app/admin/(dashboard)/products/edit-actions';
 import { uploadProductMedia } from '@/app/admin/(dashboard)/products/upload-actions';
 
 const DEFAULT_SIZES: Record<string, string[]> = {
@@ -12,19 +12,31 @@ const DEFAULT_SIZES: Record<string, string[]> = {
   kids: ['1 год', '2 года', '3 года', '4 года', '5 лет', '6 лет'],
 };
 
-export function ProductForm({ brands, categories }: { brands: Brand[]; categories: Category[] }) {
-  const router = useRouter();
-  const [gender, setGender] = useState<'female' | 'male' | 'kids'>('female');
-  const [title, setTitle] = useState('');
-  const [price, setPrice] = useState('');
-  const [discountPrice, setDiscountPrice] = useState('');
-  const [brandId, setBrandId] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [description, setDescription] = useState('');
-  const [isNew, setIsNew] = useState(true);
-  const [isPublished, setIsPublished] = useState(true);
-  const [activeSizes, setActiveSizes] = useState<Set<string>>(new Set(DEFAULT_SIZES.female.slice(0, 4)));
-  const [uploadedMedia, setUploadedMedia] = useState<{ url: string; type: 'image' | 'video' }[]>([]);
+interface Props {
+  product: Product & { sizes?: { id: string; size_label: string; in_stock: boolean; sort_order: number }[]; media?: { id: string; url: string; media_type: string }[] };
+  brands: Brand[];
+  categories: Category[];
+}
+
+export function ProductEditForm({ product, brands, categories }: Props) {
+  const [gender, setGender] = useState<'female' | 'male' | 'kids'>(product.gender);
+  const [title, setTitle] = useState(product.title);
+  const [price, setPrice] = useState(String(product.price));
+  const [discountPrice, setDiscountPrice] = useState(
+    product.discount_price != null && product.discount_price > 0 ? String(product.discount_price) : ''
+  );
+  const [brandId, setBrandId] = useState(product.brand_id ?? '');
+  const [categoryId, setCategoryId] = useState(product.category_id ?? '');
+  const [description, setDescription] = useState(product.description ?? '');
+  const [isNew, setIsNew] = useState(product.is_new);
+  const [isPublished, setIsPublished] = useState(product.is_published);
+
+  const existingSizes = product.sizes ?? [];
+  const inStockLabels = new Set(existingSizes.filter((s) => s.in_stock).map((s) => s.size_label));
+  const [activeSizes, setActiveSizes] = useState<Set<string>>(inStockLabels);
+
+  const [existingMedia, setExistingMedia] = useState(product.media ?? []);
+  const [newMedia, setNewMedia] = useState<{ url: string; type: 'image' | 'video' }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -46,32 +58,30 @@ export function ProductForm({ brands, categories }: { brands: Brand[]; categorie
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
     setUploading(true);
     const formData = new FormData();
     Array.from(files).forEach((f) => formData.append('files', f));
-
     try {
       const results = await uploadProductMedia(formData);
-      setUploadedMedia((prev) => [...prev, ...results]);
+      setNewMedia((prev) => [...prev, ...results]);
     } finally {
       setUploading(false);
     }
   }
 
-  function removeMedia(index: number) {
-    setUploadedMedia((prev) => prev.filter((_, i) => i !== index));
+  async function handleDeleteExistingMedia(mediaId: string) {
+    await deleteProductMedia(mediaId, product.id);
+    setExistingMedia((prev) => prev.filter((m) => m.id !== mediaId));
   }
 
-  async function handleSubmit(publish: boolean) {
+  async function handleSubmit() {
     if (!title || !price) {
       alert('Заполните название и цену');
       return;
     }
-
     setSaving(true);
     try {
-      await createProduct({
+      await updateProduct(product.id, {
         title,
         description,
         price: Number(price),
@@ -79,11 +89,11 @@ export function ProductForm({ brands, categories }: { brands: Brand[]; categorie
         brandId,
         categoryId,
         gender,
-        ageGroup: gender === 'kids' ? title : null, // при необходимости выносится в отдельное поле
+        ageGroup: gender === 'kids' ? title : null,
         isNew,
-        isPublished: publish,
+        isPublished,
         sizes: DEFAULT_SIZES[gender].map((label) => ({ label, inStock: activeSizes.has(label) })),
-        mediaUrls: uploadedMedia,
+        mediaUrls: newMedia,
       });
     } finally {
       setSaving(false);
@@ -93,17 +103,42 @@ export function ProductForm({ brands, categories }: { brands: Brand[]; categorie
   return (
     <div className="grid grid-cols-1 gap-7 lg:grid-cols-[1fr_340px]">
       <div>
-        {/* Загрузка медиа */}
+        {/* Существующие медиа */}
+        {existingMedia.length > 0 && (
+          <div className="mb-5">
+            <p className="mb-2.5 text-xs uppercase tracking-wide text-muted">Текущие фото/видео</p>
+            <div className="grid grid-cols-5 gap-2.5">
+              {existingMedia.map((media) => (
+                <div key={media.id} className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gradient-to-br from-[#EDE8DC] to-[#DED5C3]">
+                  {media.media_type === 'image' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={media.url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center bg-[#1c1a17] text-paper">▶</span>
+                  )}
+                  <button
+                    onClick={() => handleDeleteExistingMedia(media.id)}
+                    className="absolute right-1 top-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-black/70 text-[10px] text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Добавить новые медиа */}
         <label className="mb-5 block cursor-pointer rounded-card border-2 border-dashed border-line bg-card p-9 text-center transition-colors hover:border-taupe-soft">
           <div className="mb-2.5 text-2xl text-taupe-soft">⇧</div>
-          <p className="text-sm text-muted">{uploading ? 'Загружаем…' : 'Перетащите фото или видео сюда'}</p>
-          <p className="mt-1 text-xs text-taupe-soft">Или нажмите, чтобы выбрать файлы</p>
+          <p className="text-sm text-muted">{uploading ? 'Загружаем…' : 'Добавить фото или видео'}</p>
+          <p className="mt-1 text-xs text-taupe-soft">Нажмите, чтобы выбрать файлы</p>
           <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFileSelect} />
         </label>
 
-        {uploadedMedia.length > 0 && (
+        {newMedia.length > 0 && (
           <div className="mb-6 grid grid-cols-5 gap-2.5">
-            {uploadedMedia.map((media, i) => (
+            {newMedia.map((media, i) => (
               <div key={i} className="relative aspect-[3/4] overflow-hidden rounded-lg bg-gradient-to-br from-[#EDE8DC] to-[#DED5C3]">
                 {media.type === 'image' ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -112,7 +147,7 @@ export function ProductForm({ brands, categories }: { brands: Brand[]; categorie
                   <span className="flex h-full w-full items-center justify-center bg-[#1c1a17] text-paper">▶</span>
                 )}
                 <button
-                  onClick={() => removeMedia(i)}
+                  onClick={() => setNewMedia((prev) => prev.filter((_, idx) => idx !== i))}
                   className="absolute right-1 top-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-black/70 text-[10px] text-white"
                 >
                   ✕
@@ -122,21 +157,15 @@ export function ProductForm({ brands, categories }: { brands: Brand[]; categorie
           </div>
         )}
 
-        {/* Основные поля */}
         <Field label="Название товара">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Например, шерстяное пальто оверсайз"
-            className="input"
-          />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="input" />
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Цена, ₸">
-            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="89000" className="input" />
+            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="input" />
           </Field>
-          <Field label="Цена со скидкой (необязательно)">
+          <Field label="Цена со скидкой">
             <input type="number" value={discountPrice} onChange={(e) => setDiscountPrice(e.target.value)} placeholder="—" className="input" />
           </Field>
         </div>
@@ -176,13 +205,7 @@ export function ProductForm({ brands, categories }: { brands: Brand[]; categorie
         </Field>
 
         <Field label="Описание">
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            placeholder="Коротко опишите материал, крой, особенности"
-            className="input resize-none"
-          />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="input resize-none" />
         </Field>
 
         <Field label="Размеры и наличие">
@@ -206,35 +229,22 @@ export function ProductForm({ brands, categories }: { brands: Brand[]; categorie
 
       <div>
         <div className="mb-5 rounded-card border border-line bg-card p-5.5">
-          <ToggleRow
-            label="Новая коллекция"
-            sub="Покажется в блоке на главной"
-            checked={isNew}
-            onChange={setIsNew}
-          />
-          <ToggleRow
-            label="Опубликован"
-            sub="Виден в каталоге сайта"
-            checked={isPublished}
-            onChange={setIsPublished}
-          />
+          <ToggleRow label="Новая коллекция" sub="Покажется в блоке на главной" checked={isNew} onChange={setIsNew} />
+          <ToggleRow label="Опубликован" sub="Виден в каталоге сайта" checked={isPublished} onChange={setIsPublished} />
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => handleSubmit(false)}
-            disabled={saving}
-            className="flex-1 rounded-pill border border-line py-3.5 text-sm transition-colors hover:border-taupe-soft disabled:opacity-60"
-          >
-            Сохранить черновик
-          </button>
-          <button
-            onClick={() => handleSubmit(true)}
-            disabled={saving}
-            className="flex-1 rounded-pill bg-ink py-3.5 text-sm text-paper transition-colors hover:bg-[#2b2622] disabled:opacity-60"
-          >
-            {saving ? 'Сохраняем…' : 'Опубликовать'}
-          </button>
-        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={saving}
+          className="w-full rounded-pill bg-ink py-3.5 text-sm text-paper transition-colors hover:bg-[#2b2622] disabled:opacity-60"
+        >
+          {saving ? 'Сохраняем…' : 'Сохранить изменения'}
+        </button>
+        <button
+          onClick={() => window.history.back()}
+          className="mt-3 w-full rounded-pill border border-line py-3.5 text-sm transition-colors hover:border-taupe-soft"
+        >
+          ← Назад
+        </button>
       </div>
 
       <style jsx global>{`
@@ -264,17 +274,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function ToggleRow({
-  label,
-  sub,
-  checked,
-  onChange,
-}: {
-  label: string;
-  sub: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
+function ToggleRow({ label, sub, checked, onChange }: { label: string; sub: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center justify-between py-3.5">
       <div>
@@ -285,11 +285,7 @@ function ToggleRow({
         onClick={() => onChange(!checked)}
         className={`relative h-6 w-10.5 flex-shrink-0 rounded-pill transition-colors ${checked ? 'bg-ink' : 'bg-line'}`}
       >
-        <span
-          className={`absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white transition-transform ${
-            checked ? 'translate-x-5' : 'translate-x-0.5'
-          }`}
-        />
+        <span className={`absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
       </button>
     </div>
   );
